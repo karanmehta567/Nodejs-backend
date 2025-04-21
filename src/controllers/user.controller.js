@@ -20,7 +20,7 @@ const registerUser = asyncHandler(async (req, res) => {
     ) {
         throw new Error('All fields are required')
     }
-    const exiestedUser = User.findOne({
+    const exiestedUser = await User.findOne({
         $or: [
             { username: username },
             { email: email }
@@ -29,16 +29,18 @@ const registerUser = asyncHandler(async (req, res) => {
     if (exiestedUser) {
         throw new Error(409, 'User already exists,Create new one')
     }
-    const localpathavatar = req.files?.avatar[0]?.path
+    const localFilePath = req.files?.avatar[0]?.path
     const localImagepath = req.files?.coverImg[0]?.path
 
-    if (!localpathavatar) {
+    if (!localFilePath) {
         throw new Error(409, 'Avatar file is required')
     }
-    const avatar = await fileUploadtoCloudianry(localpathavatar)
+    const avatar = await fileUploadtoCloudianry(localFilePath)
     const avatar2 = await fileUploadtoCloudianry(localImagepath)
     if (!avatar) {
-        throw new Error(400, 'Error while uploading avatar')
+        const error = new Error('Error while uploading avatar')
+        error.statusCode = 500;
+        throw error
     }
     const usre = await User.create({
         username: username.toLowerCase(),
