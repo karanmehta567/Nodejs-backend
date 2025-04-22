@@ -107,8 +107,44 @@ const loginUser = asyncHandler(async (req, res) => {
         throw error
     }
     const { accessTAOKEN, refreshToken } = await generateAccessandRefreshToen(findUser._id)
+    const logedinUser = await User.findById(findUser._id).select('-password -refreshToken')
+    const options = {
+        httpOnly: true,
+        secure: true
+    }
+    return res.status(200)
+        .cookie('accessToken', accessTAOKEN, options)
+        .cookie('refreshToken', refreshToken, options)
+        .json({
+            response: new ApiResponse(200, {
+                user: logedinUser, accessTAOKEN, refreshToken
+            }, 'User loggedin sucessfully')
+        })
+})
+const logoutUser = asyncHandler(async (req, res) => {
+    User.findByIdAndUpdate(
+        req.user._id, {
+        $set: {
+            refreshToken: undefined
+        }
+    },
+        {
+            new: true
+        }
+    )
+    const options = {
+        httpOnly: true,
+        secure: true
+    }
+    return res.status(200)
+        .clearCookie('accessToken', options)
+        .clearCookie('refreshToken', options)
+        .json({
+            message: 'User logged Out'
+        })
 })
 export {
     registerUser,
-    loginUser
+    loginUser,
+    logoutUser
 } 
