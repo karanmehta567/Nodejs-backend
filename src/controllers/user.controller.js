@@ -2,6 +2,23 @@ import { User } from "../models/userModel.js";
 import { asyncHandler } from "../utils/index.js";
 import { fileUploadtoCloudianry } from "../utils/file.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+
+const generateAccessandRefreshToen = async (userId) => {
+    try {
+        const user = await User.findById(userId)
+        const accessTAOKEN = user.generateAccessToken()
+        const refreshToken = user.generateRefreshToken()
+        user.refreshToken = refreshToken
+        const tokenizedUser = await user.save({
+            validateBeforeSave: false
+        })
+        return { accessTAOKEN, refreshToken }
+    } catch (error) {
+        const customError = new Error('Error while generating tokens')
+        customError.statusCode = 500
+        throw customError
+    }
+}
 const registerUser = asyncHandler(async (req, res) => {
     //get user details from frontend
     //validation- not empty
@@ -42,7 +59,7 @@ const registerUser = asyncHandler(async (req, res) => {
         error.statusCode = 500;
         throw error
     }
-    const usre = await User.create({
+    const user = await User.create({
         username: username.toLowerCase(),
         email,
         avatar: avatar?.url,
@@ -50,12 +67,48 @@ const registerUser = asyncHandler(async (req, res) => {
         fullName,
         password
     })
-    const creaetdUser = await User.findById(usre._id).select('-password  -refreshToken')
-    if (!creaetdUser) {
+    const createdUser = await User.findById(user._id).select('-password  -refreshToken')
+    if (!createdUser) {
         throw new Error(500, 'Error while creating user')
     }
     return res.status(201).json({
         response: new ApiResponse(200, creaetdUser, 'User registered successfully')
     })
 })
-export { registerUser } 
+const loginUser = asyncHandler(async (req, res) => {
+    //req body-get data
+    //username || email
+    // find the user
+    // if not found-throw error
+    // check password
+    // tokens
+    // send these tokens either in tokens
+    const { username, email, password } = req.body
+    if (!(username || email)) {
+        const error = new Error('Username or email is required')
+        error.statusCode = 400
+        throw error
+    }
+    const findUser = await User.findOne({
+        $or: [
+            { username },
+            { email }
+        ]
+    })
+    if (!findUser) {
+        const error = new Error('User does not exist')
+        error.statusCode = 404
+        throw error
+    }
+    const isPasswordValid = await findUser.isPasswordMtahced(password)
+    if (!isPasswordValid) {
+        const error = new Error('Password does not matched')
+        error.statusCode = 400
+        throw error
+    }
+    const { accessTAOKEN, refreshToken } = await generateAccessandRefreshToen(findUser._id)
+})
+export {
+    registerUser,
+    loginUser
+} 
