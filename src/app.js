@@ -3,7 +3,10 @@ import cors from 'cors'
 import express from 'express'
 const app = express()
 
-app.use(cors())
+app.use(cors({
+    origin: 'http://localhost:8000',
+    credentials: true
+}))
 app.use(express.json())
 app.use(express.urlencoded({
     extended: true

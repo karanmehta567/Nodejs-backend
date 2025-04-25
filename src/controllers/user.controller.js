@@ -2,17 +2,18 @@ import { User } from "../models/userModel.js";
 import { asyncHandler } from "../utils/index.js";
 import { fileUploadtoCloudianry } from "../utils/file.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-
+import jwt from 'jsonwebtoken'
 const generateAccessandRefreshToen = async (userId) => {
     try {
         const user = await User.findById(userId)
-        const accessTAOKEN = user.generateAccessToken()
+        const accessToken = user.generateAccessToken()
+        console.log('acess Token', accessToken)
         const refreshToken = user.generateRefreshToken()
         user.refreshToken = refreshToken
         const tokenizedUser = await user.save({
             validateBeforeSave: false
         })
-        return { accessTAOKEN, refreshToken }
+        return { accessToken, refreshToken }
     } catch (error) {
         const customError = new Error('Error while generating tokens')
         customError.statusCode = 500
@@ -72,7 +73,7 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new Error(500, 'Error while creating user')
     }
     return res.status(201).json({
-        response: new ApiResponse(200, creaetdUser, 'User registered successfully')
+        response: new ApiResponse(200, createdUser, 'User registered successfully')
     })
 })
 const loginUser = asyncHandler(async (req, res) => {
@@ -106,23 +107,23 @@ const loginUser = asyncHandler(async (req, res) => {
         error.statusCode = 400
         throw error
     }
-    const { accessTAOKEN, refreshToken } = await generateAccessandRefreshToen(findUser._id)
+    const { accessToken, refreshToken } = await generateAccessandRefreshToen(findUser._id)
     const logedinUser = await User.findById(findUser._id).select('-password -refreshToken')
     const options = {
         httpOnly: true,
         secure: true
     }
     return res.status(200)
-        .cookie('accessToken', accessTAOKEN, options)
+        .cookie('accessToken', accessToken, options)
         .cookie('refreshToken', refreshToken, options)
         .json({
             response: new ApiResponse(200, {
-                user: logedinUser, accessTAOKEN, refreshToken
+                user: logedinUser, accessToken, refreshToken
             }, 'User loggedin sucessfully')
         })
 })
 const logoutUser = asyncHandler(async (req, res) => {
-    User.findByIdAndUpdate(
+    await User.findByIdAndUpdate(
         req.user._id, {
         $set: {
             refreshToken: undefined
@@ -143,8 +144,49 @@ const logoutUser = asyncHandler(async (req, res) => {
             message: 'User logged Out'
         })
 })
+const generateRefreshAcessToken = asyncHandler(async (req, res) => {
+    const incomingRefresh = req.cookies?.refreshToken || req.body?.refreshToken
+    if (!incomingRefresh) {
+        return res.status(401).json({
+            message: 'Unauthorized access'
+        })
+    }
+    try {
+        const decodedtoken = jwt.verify(incomingRefresh, process.env.REFRESH_TOKEN)
+        const user = await User.findById(decodedtoken._id)
+        if (!user) {
+            return res.status(401).json({
+                message: 'Invalid refresh token'
+            })
+        }
+        if (incomingRefresh !== user.refreshToken) {
+            return res.status(401).json({
+                message: 'Invalid token or Refresh token expired'
+            })
+        }
+        const { accessToken, newRefreshToken } = await generateAccessandRefreshToen(user._id)
+        const options = {
+            httpOnly: true,
+            secure: true
+        }
+        return res.status(200)
+            .cookie('accessToken', accessToken, options)
+            .cookie('refreshToken', newRefreshToken, options)
+            .json({
+                response: new ApiResponse(200, {
+                    accessToken, newRefreshToken
+                }, 'Tokens generated succesfully')
+            })
+    } catch (error) {
+        // console.log('error while generating refresh token')
+        return res.status(401).json({
+            message: 'Invalid refresh token'
+        })
+    }
+})
 export {
     registerUser,
     loginUser,
-    logoutUser
+    logoutUser,
+    generateRefreshAcessToken
 } 
