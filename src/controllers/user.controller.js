@@ -184,9 +184,78 @@ const generateRefreshAcessToken = asyncHandler(async (req, res) => {
         })
     }
 })
+const changePassword = asyncHandler(async (req, res) => {
+    const { oldPassword, newPassword } = req.body
+    //get some help from middleware, req.user if the user is loggedin only then he will be able to change password so simply
+    const findUser = await User.findById(req.user._id)
+    const isPasswordCorrect = await findUser.isPasswordMtahced(oldPassword)
+    if (!isPasswordCorrect) {
+        return res.status(401).json({
+            message: 'Password does not matched'
+        })
+    }
+    findUser.password = newPassword
+    await findUser.save({
+        validateBeforeSave: false
+    })
+    return res.status(200).json({
+        response: new ApiResponse(200, {}, 'Password changed succesfully')
+    })
+})
+const getCurrentUser = asyncHandler(async (req, res) => {
+    return res.status(200).json(200, req.user, 'Current user fetched succesfully')
+})
+const updateThedamnUser = asyncHandler(async (req, res) => {
+    const { fullName, email } = req.body;
+    if (!(fullName || email)) {
+        return res.status(400).json({
+            message: 'provide me the fields to update'
+        })
+    }
+    //same setup
+    const user = await User.findByIdAndUpdate(req.user._id, {
+        $set: {
+            fullName,
+            email
+        }
+    }, { new: true }).select('-password -refreshToken')
+    return res.status(200).json({
+        response: new ApiResponse(200, user, 'User updated succesfully')
+    })
+})
+const updatetheDamnAVatar = asyncHandler(async (req, res) => {
+    const avatarlocalpath = req.file?.path
+    if (!avatarlocalpath) {
+        return res.status(401).json({
+            message: 'Avatar file is required'
+        })
+    }
+    const fileUpload = await fileUploadtoCloudianry(avatarlocalpath)
+    if (!fileUpload) {
+        return res.status(400).json({
+            message: 'Error while uplaoding avatar'
+        })
+    }
+    const avataruploadtodb = await User.findByIdAndUpdate(req.user._id,
+        {
+            $set: {
+                avatar: fileUpload?.url
+            }
+        },
+        { new: true }
+    ).select('-password -refreshToken')
+    return res.status(200).json({
+        response: new ApiResponse(200, avataruploadtodb, 'avatar updated succesfully')
+    })
+})
+
 export {
     registerUser,
     loginUser,
     logoutUser,
-    generateRefreshAcessToken
+    generateRefreshAcessToken,
+    changePassword,
+    getCurrentUser,
+    updateThedamnUser,
+    updatetheDamnAVatar
 } 
